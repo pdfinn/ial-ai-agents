@@ -1,0 +1,360 @@
+{
+  "name": "SkillsFuture AI Lesson Planner",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "SkillsFuture AI Lesson Planner",
+        "formDescription": "Generate complete lesson packages for adult learners in Singapore — aligned to SSG frameworks, WSQ competency standards, and SkillsFuture Series.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Domain",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Infocomm Technology" },
+                  { "option": "Digital Marketing" },
+                  { "option": "Data Analytics & AI" },
+                  { "option": "Cybersecurity" },
+                  { "option": "Business & Management" },
+                  { "option": "Healthcare & Community Services" },
+                  { "option": "Green Skills & Sustainability" },
+                  { "option": "Creative Industries" },
+                  { "option": "Advanced Manufacturing" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "WSQ Level",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Level 1 - Certificate" },
+                  { "option": "Level 2 - Higher Certificate" },
+                  { "option": "Level 3 - Advanced Certificate" },
+                  { "option": "Level 4 - Diploma" },
+                  { "option": "Level 5 - Specialist Diploma" },
+                  { "option": "Level 6 - Graduate Diploma" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Topic",
+              "requiredField": true,
+              "placeholder": "e.g., Introduction to Prompt Engineering, Agile Project Management, Power BI Dashboards"
+            },
+            {
+              "fieldLabel": "Session Duration (minutes)",
+              "fieldType": "number",
+              "requiredField": true,
+              "placeholder": "180"
+            },
+            {
+              "fieldLabel": "Class Size",
+              "fieldType": "number",
+              "requiredField": true,
+              "placeholder": "25"
+            },
+            {
+              "fieldLabel": "Learner Profile",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Mid-career switchers (PMETs)" },
+                  { "option": "Working professionals upskilling" },
+                  { "option": "Fresh graduates / early career" },
+                  { "option": "Senior workers (50+) reskilling" },
+                  { "option": "Mixed / general adult learners" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Delivery Mode",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Face-to-face classroom" },
+                  { "option": "Synchronous online (Zoom/Teams)" },
+                  { "option": "Blended (classroom + async)" },
+                  { "option": "Fully asynchronous" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Assessment Approach",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Competency-based (WSQ)" },
+                  { "option": "Portfolio / project-based" },
+                  { "option": "Written assessment" },
+                  { "option": "Practical demonstration" },
+                  { "option": "Mixed methods" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Additional Context",
+              "fieldType": "textarea",
+              "placeholder": "Any special requirements: language considerations, accessibility needs, industry partnerships, prerequisite knowledge, etc."
+            }
+          ]
+        },
+        "options": {
+          "path": "skillsfuture-lesson-planner"
+        }
+      },
+      "id": "form-trigger",
+      "name": "Trainer Input Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [-200, 200],
+      "webhookId": "skillsfuture-lesson-planner",
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Create a complete lesson plan for the following session:\n\n**Domain:** {{ $json.Domain }}\n**WSQ Level:** {{ $json['WSQ Level'] }}\n**Topic:** {{ $json.Topic }}\n**Duration:** {{ $json['Session Duration (minutes)'] }} minutes\n**Class Size:** {{ $json['Class Size'] }}\n**Learner Profile:** {{ $json['Learner Profile'] }}\n**Delivery Mode:** {{ $json['Delivery Mode'] }}\n**Additional Context:** {{ $json['Additional Context'] }}\n\nReturn the lesson plan in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are a curriculum designer for Singapore's Continuing Education and Training (CET) sector. You create lesson plans aligned with SkillsFuture Singapore (SSG) frameworks and Workforce Skills Qualifications (WSQ) competency standards.\n\nReturn your output in this exact Markdown structure:\n\n## Learning Outcomes\n- 3-5 measurable outcomes using Bloom's taxonomy verbs (apply, analyse, evaluate, create)\n- Each outcome mapped to the relevant WSQ competency unit where applicable\n\n## Session Flow\nFor each phase, include: timing, trainer actions, learner activities, and materials needed.\n\n### Opening (10-15% of session)\n- Ice-breaker relevant to the topic and suitable for adult learners\n- Learning outcome overview\n- Connection to learners' workplace experience\n\n### Core Learning (60-70% of session)\nBreak into 2-3 segments of 30-45 minutes each. For each segment:\n- **Concept:** What is being taught\n- **Trainer does:** Explanation approach, demo, or facilitation method\n- **Learners do:** Hands-on activity, group work, case study, or practice task\n- **Check understanding:** 1-2 formative check questions or activities\n\nInclude at least one:\n- Real Singapore workplace scenario or case study\n- Collaborative activity (pair/group work)\n- Individual practice or reflection task\n\n### Wrap-up (10-15% of session)\n- Key takeaways summary\n- Reflection prompt: \"How will you apply this at work this week?\"\n- Preview of next session or recommended follow-up learning\n\n## Differentiation Notes\nBrief guidance on supporting:\n- Learners who need more time or scaffolding\n- Learners ready for extension or deeper challenge\n- Language considerations for multilingual Singapore context\n\n## Materials List\nBulleted list of everything needed: slides, handouts, software, links, equipment.\n\nKeep the plan practical and implementation-ready. No filler. Every activity should earn its place in the session."
+        }
+      },
+      "id": "lesson-plan-agent",
+      "name": "Lesson Plan Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [80, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Create an assessment package for this session:\n\n**Topic:** {{ $('Trainer Input Form').item.json.Topic }}\n**WSQ Level:** {{ $('Trainer Input Form').item.json['WSQ Level'] }}\n**Assessment Approach:** {{ $('Trainer Input Form').item.json['Assessment Approach'] }}\n**Learner Profile:** {{ $('Trainer Input Form').item.json['Learner Profile'] }}\n\nThe lesson plan for this session is:\n{{ $('Lesson Plan Agent').item.json.output }}\n\nReturn the assessment package in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are an assessment design specialist for Singapore's WSQ and CET system. You create competency-based assessments that meet SSG audit requirements.\n\nReturn your output in this exact Markdown structure:\n\n## Formative Checks\n3-5 quick checks to use during the session. For each:\n- **When:** Which phase of the lesson\n- **Method:** (e.g., poll, show of hands, mini-task, peer explanation)\n- **Question/prompt:** The exact question or task\n- **What to look for:** Observable indicators of understanding\n\n## Summative Assessment\nOne assessment task aligned to the learning outcomes. Include:\n- **Task description:** Clear instructions as the learner would see them (2-4 sentences)\n- **Conditions:** Time allowed, open/closed book, individual or group\n- **Competency criteria:** 3-5 criteria mapping to \"competent\" / \"not yet competent\"\n- **Evidence required:** What the learner must produce or demonstrate\n\n## Marking Guide\nFor the summative assessment:\n- Rubric with criteria and performance descriptors for each level\n- Common errors and how to give constructive feedback for each\n- Borderline case guidance\n\n## Feedback Templates\n3 short templates a trainer can adapt:\n1. **Competent** — acknowledges strength, suggests extension\n2. **Not yet competent** — specific gap, concrete next steps, encouraging tone\n3. **Reassessment** — what to revise, how to resubmit\n\nKeep everything audit-ready and practical. No generic filler."
+        }
+      },
+      "id": "assessment-agent",
+      "name": "Assessment Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [400, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Recommend practical tools and resources for this session:\n\n**Domain:** {{ $('Trainer Input Form').item.json.Domain }}\n**Topic:** {{ $('Trainer Input Form').item.json.Topic }}\n**Delivery Mode:** {{ $('Trainer Input Form').item.json['Delivery Mode'] }}\n**Learner Profile:** {{ $('Trainer Input Form').item.json['Learner Profile'] }}\n**Class Size:** {{ $('Trainer Input Form').item.json['Class Size'] }}\n\nReturn recommendations in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are an edtech advisor specialising in Singapore's adult education sector. You recommend practical, accessible tools that trainers can adopt immediately.\n\nReturn your output in this exact Markdown structure:\n\n## Recommended Tools (pick 3-5 most relevant)\nFor each tool:\n- **Tool:** Name\n- **What it does:** One sentence\n- **Use in this session:** Specific activity where it fits\n- **Cost:** Free / freemium / paid (with SGD estimate if paid)\n- **Setup time:** How long to get started\n\nPrioritise tools that are: free or low-cost, work on mobile, require no IT department approval, and support multilingual use.\n\n## AI-Assisted Preparation Tips\n3-5 specific prompts or workflows the trainer can use to:\n- Generate practice exercises or case studies\n- Create differentiated materials\n- Build quiz questions from their slide content\n\nFor each tip, include the actual prompt text they can copy and use.\n\n## Open Educational Resources\n3-5 specific, freely available resources relevant to this topic:\n- **Resource:** Name and where to find it\n- **What it covers:** One sentence\n- **How to use it:** Specific suggestion for this session\n\nPrioritise SSG-endorsed resources, Singapore government resources, and reputable OER platforms. Do not recommend resources you are not confident exist."
+        }
+      },
+      "id": "tools-agent",
+      "name": "Tools & Resources Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [720, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "jsCode": "const form = $('Trainer Input Form').item.json;\nconst lessonPlan = $('Lesson Plan Agent').item.json.output;\nconst assessment = $('Assessment Agent').item.json.output;\nconst tools = $('Tools & Resources Agent').item.json.output;\n\nconst timestamp = new Date().toISOString();\n\nconst markdown = `# ${form.Topic}\n\n**Domain:** ${form.Domain}\n**WSQ Level:** ${form['WSQ Level']}\n**Duration:** ${form['Session Duration (minutes)']} minutes\n**Class Size:** ${form['Class Size']}\n**Learner Profile:** ${form['Learner Profile']}\n**Delivery Mode:** ${form['Delivery Mode']}\n**Generated:** ${timestamp}\n\n---\n\n# Part 1: Lesson Plan\n\n${lessonPlan}\n\n---\n\n# Part 2: Assessment Package\n\n${assessment}\n\n---\n\n# Part 3: Tools & Resources\n\n${tools}\n\n---\n\n*Generated by SkillsFuture AI Lesson Planner — an open-source n8n workflow by NERVsystems.*\n*Presented at the Institute for Adult Learning (IAL), Singapore.*\n`;\n\nreturn [{\n  json: {\n    markdown,\n    title: `${form.Domain} - ${form.Topic} (${form['WSQ Level']})`,\n    metadata: {\n      domain: form.Domain,\n      topic: form.Topic,\n      wsq_level: form['WSQ Level'],\n      generated_at: timestamp\n    }\n  }\n}];"
+      },
+      "id": "compile-output",
+      "name": "Compile Output",
+      "type": "n8n-nodes-base.code",
+      "position": [1040, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.markdown }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/markdown; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-to-form",
+      "name": "Return to Trainer",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [1280, 200],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "llm-1",
+      "name": "LLM for Lesson Plan",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [160, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "llm-2",
+      "name": "LLM for Assessment",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [480, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "llm-3",
+      "name": "LLM for Tools",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [800, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "content": "## 1. Three Specialist Agents\nSequential chain: each builds on the previous output.\nAll prompts use structured Markdown output format.",
+        "height": 500,
+        "width": 920
+      },
+      "id": "note-agents",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [0, 0],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 2. Compile & Deliver\nMerge all outputs into a single Markdown document and return directly to the trainer via the form response.",
+        "height": 500,
+        "width": 540,
+        "color": 5
+      },
+      "id": "note-compile",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [960, 0],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Trainer Input Form": {
+      "main": [
+        [
+          {
+            "node": "Lesson Plan Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lesson Plan Agent": {
+      "main": [
+        [
+          {
+            "node": "Assessment Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assessment Agent": {
+      "main": [
+        [
+          {
+            "node": "Tools & Resources Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tools & Resources Agent": {
+      "main": [
+        [
+          {
+            "node": "Compile Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Output": {
+      "main": [
+        [
+          {
+            "node": "Return to Trainer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM for Lesson Plan": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Lesson Plan Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM for Assessment": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Assessment Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM for Tools": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Tools & Resources Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
