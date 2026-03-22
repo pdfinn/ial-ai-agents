@@ -11,7 +11,7 @@ These are open-source n8n workflow templates designed for Singapore's adult educ
 
 | Workflow | Description |
 |----------|-------------|
-| `workflows/skillsfuture-lesson-planner.json` | Three-agent pipeline that generates a complete lesson package: lesson plan, assessment package, and tool recommendations — all aligned to SSG/WSQ frameworks. |
+| `workflows/skillsfuture-lesson-planner.json` | Four-agent pipeline that generates a complete lesson package: lesson plan, assessment package, tool recommendations, and a compiled final document — all aligned to SSG/WSQ frameworks. No code required — every step is plain English. |
 
 ### Prompt Templates (copy and use anywhere)
 
@@ -22,13 +22,14 @@ The same prompts used in the workflows, extracted as standalone templates you ca
 | `templates/lesson-plan-agent.md` | Structured lesson plan with learning outcomes, session flow, differentiation notes, and materials list |
 | `templates/assessment-agent.md` | Formative checks, summative assessment with rubric, marking guide, and feedback templates |
 | `templates/tools-and-resources-agent.md` | Edtech tool recommendations, AI preparation tips with copy-paste prompts, and OER links |
+| `templates/compile-agent.md` | Merges the three sections above into one polished trainer-ready document |
 
 ## Quick Start
 
 ### Prerequisites
 
 - [n8n](https://n8n.io) — self-hosted or cloud
-- An OpenAI API key (the workflows default to GPT-4o-mini; swap to any model you prefer)
+- An Anthropic API key (the workflows use Claude Sonnet; you can swap to any model you prefer)
 
 ### Setup
 
@@ -42,10 +43,10 @@ The same prompts used in the workflows, extracted as standalone templates you ca
    - Go to **Workflows > Import from File**
    - Select `workflows/skillsfuture-lesson-planner.json`
 
-3. **Add your OpenAI credential:**
-   - Go to **Credentials > Add Credential > OpenAI**
+3. **Add your Anthropic credential:**
+   - Go to **Credentials > Add Credential > Anthropic**
    - Paste your API key
-   - Update the three LLM nodes in the workflow to use this credential
+   - Update the four Claude nodes in the workflow to use this credential
 
 4. **Activate the workflow** and visit the form URL shown in the Trainer Input Form node.
 
@@ -60,6 +61,7 @@ These workflows were built with a few opinions:
 - **Structured output formats** — Every agent specifies the exact Markdown structure it expects. This makes output consistent and composable.
 - **Scoped responsibilities** — Each agent does one thing well rather than trying to produce everything in a single prompt.
 - **Singapore context** — WSQ levels, SSG frameworks, SkillsFuture Series, multilingual considerations, and local workplace scenarios are baked in.
+- **No code required** — The entire workflow is form fields and plain English prompts. Every step can be read, understood, and modified by anyone — no programming knowledge needed.
 - **Practical over impressive** — No unnecessary nodes, no unused integrations. The workflow does what it needs to and stops.
 
 ## Adapting for Your Context
