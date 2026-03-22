@@ -1,0 +1,253 @@
+{
+  "name": "Batch Trainee Feedback Analyser",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Batch Trainee Feedback Analyser",
+        "formDescription": "Paste trainee feedback from a post-course survey (one response per line). The workflow classifies each response by theme and sentiment, then generates an actionable summary report.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Course Title",
+              "requiredField": true,
+              "placeholder": "e.g., Introduction to Generative AI Workflow Automation"
+            },
+            {
+              "fieldLabel": "Feedback Responses",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "Paste feedback here — one response per line.\n\nExample:\nThe hands-on exercises were very helpful and practical.\nToo much content for one day, felt rushed in the afternoon.\nTrainer was knowledgeable but spoke too fast.\nGreat real-world examples from Singapore context.\nWould have liked more time for Q&A.\nThe group activity was the highlight of the course."
+            },
+            {
+              "fieldLabel": "What would you like to improve?",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Overall course quality" },
+                  { "option": "Content and curriculum" },
+                  { "option": "Trainer delivery" },
+                  { "option": "Assessment and activities" },
+                  { "option": "All of the above" }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "path": "feedback-analyser"
+        }
+      },
+      "id": "form-trigger",
+      "name": "Feedback Input Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [-200, 200],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Split feedback text into individual items\nconst courseTitle = $input.first().json['Course Title'];\nconst rawFeedback = $input.first().json['Feedback Responses'];\nconst focusArea = $input.first().json['What would you like to improve?'];\n\n// Split by newlines, trim, remove empty lines\nconst lines = rawFeedback\n  .split('\\n')\n  .map(line => line.trim())\n  .filter(line => line.length > 0);\n\n// Return each line as a separate item — n8n will process each one\nreturn lines.map((line, index) => ({\n  json: {\n    id: index + 1,\n    feedback: line,\n    courseTitle,\n    focusArea,\n    totalResponses: lines.length\n  }\n}));"
+      },
+      "id": "split-feedback",
+      "name": "Split Into Individual Responses",
+      "type": "n8n-nodes-base.code",
+      "position": [80, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this trainee feedback response:\n\n\"{{ $json.feedback }}\"\n\nReturn ONLY a valid JSON object (no markdown, no explanation) with these exact keys:\n{\n  \"id\": {{ $json.id }},\n  \"feedback\": \"{{ $json.feedback }}\",\n  \"sentiment\": \"positive\" or \"negative\" or \"neutral\",\n  \"theme\": one of [\"content\", \"delivery\", \"pacing\", \"activities\", \"assessment\", \"materials\", \"facilities\", \"general\"],\n  \"actionable\": true or false,\n  \"suggested_action\": \"one short sentence — what the trainer could do differently\" or null if not actionable\n}",
+        "options": {
+          "systemMessage": "You are a training feedback classifier. You receive one trainee feedback response at a time and classify it. Return ONLY a valid JSON object — no markdown code fences, no explanation, no extra text. Just the raw JSON object."
+        }
+      },
+      "id": "classify-agent",
+      "name": "Classify Each Response",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [360, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Aggregate all classified responses into one summary object\nconst items = $input.all();\nconst courseTitle = $('Feedback Input Form').first().json['Course Title'];\nconst focusArea = $('Feedback Input Form').first().json['What would you like to improve?'];\n\n// Parse the AI output — each item has .json.output as a JSON string\nconst classified = items.map(item => {\n  try {\n    // Try to parse the AI output as JSON\n    let text = item.json.output || '';\n    // Remove markdown code fences if present\n    text = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    return JSON.parse(text);\n  } catch (e) {\n    return {\n      id: '?',\n      feedback: item.json.output || 'Parse error',\n      sentiment: 'unknown',\n      theme: 'general',\n      actionable: false,\n      suggested_action: null\n    };\n  }\n});\n\n// Count sentiments\nconst sentiments = { positive: 0, negative: 0, neutral: 0, unknown: 0 };\nclassified.forEach(c => { sentiments[c.sentiment] = (sentiments[c.sentiment] || 0) + 1; });\n\n// Count themes\nconst themes = {};\nclassified.forEach(c => { themes[c.theme] = (themes[c.theme] || 0) + 1; });\n\n// Collect actionable items\nconst actionableItems = classified\n  .filter(c => c.actionable)\n  .map(c => ({ feedback: c.feedback, action: c.suggested_action, theme: c.theme }));\n\nreturn [{\n  json: {\n    courseTitle,\n    focusArea,\n    totalResponses: classified.length,\n    sentiments,\n    themes,\n    actionableItems,\n    allClassified: classified\n  }\n}];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Classifications",
+      "type": "n8n-nodes-base.code",
+      "position": [640, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate an actionable feedback report for this course.\n\n**Course:** {{ $json.courseTitle }}\n**Focus area:** {{ $json.focusArea }}\n**Total responses analysed:** {{ $json.totalResponses }}\n\n**Sentiment breakdown:**\n{{ JSON.stringify($json.sentiments, null, 2) }}\n\n**Theme breakdown:**\n{{ JSON.stringify($json.themes, null, 2) }}\n\n**Actionable items:**\n{{ JSON.stringify($json.actionableItems, null, 2) }}\n\n**All classified responses:**\n{{ JSON.stringify($json.allClassified, null, 2) }}\n\nReturn the report in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are a training quality analyst for Singapore's adult education sector. You produce concise, actionable feedback reports that help trainers improve their courses.\n\nReturn your output in this exact Markdown structure:\n\n## Feedback Report: [Course Title]\n\n**Responses analysed:** [n]\n\n### Sentiment Overview\nA 1-2 sentence summary of the overall sentiment, plus a simple breakdown:\n- Positive: [n] ([%])\n- Negative: [n] ([%])\n- Neutral: [n] ([%])\n\n### Key Themes\nRank themes by frequency. For each theme with 2+ mentions:\n- **[Theme]** ([n] mentions): One sentence summarising what trainees said\n\n### What's Working Well\n3-5 bullet points drawn from positive feedback. Quote specific trainee words where impactful.\n\n### Areas for Improvement\n3-5 bullet points drawn from negative/neutral feedback. For each:\n- **Issue:** What trainees raised\n- **Suggested action:** A concrete, specific step the trainer can take\n\n### Priority Actions\nRank the top 3 most impactful changes the trainer should make, based on frequency and severity:\n1. **[Action]** — Why this matters and how to implement it\n2. **[Action]** — Why and how\n3. **[Action]** — Why and how\n\n### Quick Wins\n2-3 small changes that could be implemented immediately with minimal effort.\n\nKeep the report concise, specific, and focused on actions — not just observations. Use Singapore adult education context where relevant (e.g., reference SSG quality statements, WSQ assessment requirements)."
+        }
+      },
+      "id": "summary-agent",
+      "name": "Generate Summary Report",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [920, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/markdown; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Return Report",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1200, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-classify",
+      "name": "Claude (Classify)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [440, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-summary",
+      "name": "Claude (Summary)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [1000, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "content": "## 1. Split & Classify\nThe Code node splits feedback text into individual items.\nn8n automatically loops the AI agent over each item.\nEach response is classified by theme, sentiment, and actionability.",
+        "height": 360,
+        "width": 580
+      },
+      "id": "note-classify",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [20, 20],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 2. Aggregate & Report\nA second Code node merges all classifications into counts and lists.\nA final AI agent produces an actionable report with priorities.\n\n**Why n8n?** Processes 50+ responses in one click.\nA chatbot would need copy-paste one at a time.",
+        "height": 360,
+        "width": 620,
+        "color": 5
+      },
+      "id": "note-report",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [620, 20],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Feedback Input Form": {
+      "main": [
+        [
+          {
+            "node": "Split Into Individual Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Individual Responses": {
+      "main": [
+        [
+          {
+            "node": "Classify Each Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Each Response": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Classifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Classifications": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary Report": {
+      "main": [
+        [
+          {
+            "node": "Return Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Classify)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Each Response",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Summary)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Singapore"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

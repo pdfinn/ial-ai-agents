@@ -1,0 +1,366 @@
+{
+  "name": "SSG Course Proposal Section Drafter",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "SSG Course Proposal Drafter",
+        "formDescription": "Generate draft content for the hardest sections of the SSG Course Proposal (CP) form: Learning Units & Outcomes, K&A mapping, and Instructional Rationale — all cross-referenced and grounded in real Skills Framework data.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Sector",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Infocomm Technology" },
+                  { "option": "Accountancy" },
+                  { "option": "Aerospace" },
+                  { "option": "Built Environment" },
+                  { "option": "Design" },
+                  { "option": "Early Childhood" },
+                  { "option": "Financial Services" },
+                  { "option": "Food Services" },
+                  { "option": "Healthcare" },
+                  { "option": "Hotel and Accommodation Services" },
+                  { "option": "Human Resource" },
+                  { "option": "Logistics" },
+                  { "option": "Media" },
+                  { "option": "Retail" },
+                  { "option": "Social Service" },
+                  { "option": "Tourism" },
+                  { "option": "Training and Adult Education" },
+                  { "option": "Workplace Safety and Health" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Course Title",
+              "requiredField": true,
+              "placeholder": "e.g., Generative AI Workflow Automation"
+            },
+            {
+              "fieldLabel": "Course Description",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "Describe the course scope, target job roles, and key skills to be developed. The more detail you provide, the better the output."
+            },
+            {
+              "fieldLabel": "WSQ Level",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Level 2 - Higher Certificate" },
+                  { "option": "Level 3 - Advanced Certificate" },
+                  { "option": "Level 4 - Diploma" },
+                  { "option": "Level 5 - Specialist Diploma" },
+                  { "option": "Level 6 - Graduate Diploma" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Number of Learning Units",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "2" },
+                  { "option": "3" },
+                  { "option": "4" },
+                  { "option": "5" },
+                  { "option": "6" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Total Training Duration (hours)",
+              "fieldType": "number",
+              "requiredField": true,
+              "placeholder": "40"
+            },
+            {
+              "fieldLabel": "Delivery Mode",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Face-to-face classroom" },
+                  { "option": "Synchronous E-learning" },
+                  { "option": "Blended (classroom + e-learning)" },
+                  { "option": "Asynchronous E-learning" }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "path": "course-proposal-drafter"
+        }
+      },
+      "id": "form-trigger",
+      "name": "Course Details Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [-200, 200],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/pdfinn/ial-ai-agents/master/data/tsc-ka-data.json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-tsc-data",
+      "name": "Fetch TSC Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [80, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Get form inputs\nconst sector = $('Course Details Form').first().json['Sector'];\nconst title = $('Course Details Form').first().json['Course Title'];\nconst description = $('Course Details Form').first().json['Course Description'];\nconst level = $('Course Details Form').first().json['WSQ Level'];\nconst numLUs = parseInt($('Course Details Form').first().json['Number of Learning Units']);\nconst duration = $('Course Details Form').first().json['Total Training Duration (hours)'];\nconst deliveryMode = $('Course Details Form').first().json['Delivery Mode'];\n\n// Get TSC data\nconst tscData = $input.first().json;\nconst sectorTSCs = tscData.sectors[sector] || [];\n\n// Keyword matching\nconst searchText = (title + ' ' + description).toLowerCase();\nconst keywords = searchText\n  .split(/[\\s,;/&+.()]+/)\n  .filter(w => w.length > 2)\n  .filter(w => !['and', 'the', 'for', 'with', 'using', 'from', 'into', 'that', 'this', 'will', 'can', 'are', 'how'].includes(w));\n\nconst scored = sectorTSCs.map(tsc => {\n  const skillText = (tsc.skill + ' ' + (tsc.parent || '')).toLowerCase();\n  const kaText = [...(tsc.knowledge || []), ...(tsc.abilities || [])].join(' ').toLowerCase();\n  const skillMatches = keywords.filter(kw => skillText.includes(kw));\n  const kaMatches = keywords.filter(kw => kaText.includes(kw));\n  return { ...tsc, score: skillMatches.length * 3 + kaMatches.length };\n}).filter(tsc => tsc.score > 0)\n  .sort((a, b) => b.score - a.score);\n\n// Take top 5 TSC matches\nconst topTSCs = scored.slice(0, 5);\n\n// Include top 3 CCS\nconst topCCS = (tscData.ccs || []).slice(0, 3);\n\nreturn [{\n  json: {\n    sector, title, description, level, numLUs, duration, deliveryMode,\n    matchedTSCs: topTSCs.map(t => ({\n      code: t.code, skill: t.skill, level: t.level,\n      knowledge: t.knowledge || [], abilities: t.abilities || []\n    })),\n    matchedCCS: topCCS.map(c => ({\n      code: c.code, skill: c.skill,\n      knowledge: c.knowledge || [], abilities: c.abilities || []\n    }))\n  }\n}];"
+      },
+      "id": "filter-tscs",
+      "name": "Match TSCs to Course",
+      "type": "n8n-nodes-base.code",
+      "position": [340, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Design the Learning Unit and Learning Outcome structure for this WSQ course.\n\n**Course Title:** {{ $json.title }}\n**Sector:** {{ $json.sector }}\n**WSQ Level:** {{ $json.level }}\n**Number of Learning Units:** {{ $json.numLUs }}\n**Total Duration:** {{ $json.duration }} hours\n**Delivery Mode:** {{ $json.deliveryMode }}\n**Description:** {{ $json.description }}\n\n**Matched TSCs (from Skills Framework):**\n{{ JSON.stringify($json.matchedTSCs, null, 2) }}\n\n**Matched CCS:**\n{{ JSON.stringify($json.matchedCCS, null, 2) }}\n\nReturn the LU/LO structure in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are a WSQ curriculum designer for Singapore's CET sector. You design Learning Unit (LU) and Learning Outcome (LO) structures for SSG Course Proposals.\n\nYour output must follow the SSG Course Proposal form structure exactly.\n\nReturn your output in this Markdown structure:\n\n## LU/LO Sequencing Rationale\n\nExplain how and why the Learning Units are sequenced using the \"Relationships Between Objectives\" method. For each LU, describe:\n- **Dependent Relationship:** What must be mastered first\n- **Supportive Relationship:** How this LU supports others\n\n## Course Structure Table\n\nFor each Learning Unit, provide rows in this format:\n\n| LU# | LU Title | LO# | Learning Outcome | Topic (T#: Title) | K&A Statement | Mode of Assessment |\n|-----|----------|------|------------------|--------------------|--------------|-----------------|\n\nRules:\n1. Label LUs as LU1, LU2, etc.\n2. Each LO maps to one LU and uses Bloom's taxonomy verbs appropriate to the WSQ level\n3. Each topic maps to specific K&A statements from the matched TSCs — use the EXACT codes and text provided\n4. Every K&A statement from the primary TSC must be covered at least once\n5. Include at least 2 different Modes of Assessment (e.g., Written Exam, Practical Exam, Portfolio, Project)\n6. MCQ can only supplement other methods, never be the sole assessment\n\n## K&A Coverage Summary\n\nList each TSC code used, and for each K&A statement, indicate which LO/Topic covers it. Flag any gaps."
+        }
+      },
+      "id": "lu-lo-agent",
+      "name": "Agent 1: LU/LO Structure",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [620, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write the instructional methodology rationale and assessment elaboration for this course.\n\n**Course Title:** {{ $('Course Details Form').item.json['Course Title'] }}\n**Delivery Mode:** {{ $('Course Details Form').item.json['Delivery Mode'] }}\n**WSQ Level:** {{ $('Course Details Form').item.json['WSQ Level'] }}\n**Duration:** {{ $('Course Details Form').item.json['Total Training Duration (hours)'] }} hours\n\n**LU/LO Structure (from previous agent):**\n{{ $('Agent 1: LU/LO Structure').item.json.output }}\n\nReturn the instructional design rationale in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are an instructional design specialist for Singapore's WSQ system. You write the Methodologies section of the SSG Course Proposal form (Section 3, tab 2/3).\n\nReturn your output in this Markdown structure:\n\n## Instructional Methods\n\nFor each Learning Unit, specify 3-5 instructional methods from this list:\n- Explicit teaching (Lecture) & Homework\n- Case studies\n- Demonstrations / Modelling\n- Peer teaching / Peer practice\n- Discussions\n- Problem-Based Learning\n- Simulation / Role Play\n- Others: [specify]\n\nFor each method:\n| LU# | Instructional Method | Duration (min) | Mode of Training | Rationale |\n|-----|---------------------|----------------|-----------------|----------|\n\nThe rationale must explain WHY this method is appropriate for achieving the learning outcomes. Include a specific example from the course content.\n\n## Assessment Methods\n\nFor each LO, specify the assessment method and elaborate:\n| LO# | Mode of Assessment | Duration (min) | Assessor:Candidate Ratio | Elaboration |\n|------|-------------------|----------------|-------------------------|-------------|\n\nThe elaboration must:\n1. State whether it is open-book or closed-book, summative or formative, individual or group\n2. Explain why this assessment method is appropriate\n3. State which K&A statements will be assessed (e.g., K1, K3, A2)\n4. Give a specific example assessment question or task\n\n## Duration Summary\n\nTotal instructional time + total assessment time = total course time. Verify this matches the stated duration.\n\nUse Singapore adult education context. Reference Bigg's Model of Constructive Alignment where relevant."
+        }
+      },
+      "id": "methodology-agent",
+      "name": "Agent 2: Methodology & Assessment",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [940, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Compile the following into a single Course Proposal draft document.\n\n**Course Details:**\n- Title: {{ $('Course Details Form').item.json['Course Title'] }}\n- Sector: {{ $('Course Details Form').item.json['Sector'] }}\n- WSQ Level: {{ $('Course Details Form').item.json['WSQ Level'] }}\n- Duration: {{ $('Course Details Form').item.json['Total Training Duration (hours)'] }} hours\n- Delivery Mode: {{ $('Course Details Form').item.json['Delivery Mode'] }}\n- Learning Units: {{ $('Course Details Form').item.json['Number of Learning Units'] }}\n\n---\n\n**SECTION 1 — LU/LO STRUCTURE & K&A MAPPING:**\n{{ $('Agent 1: LU/LO Structure').item.json.output }}\n\n---\n\n**SECTION 2 — INSTRUCTIONAL METHODOLOGY & ASSESSMENT:**\n{{ $('Agent 2: Methodology & Assessment').item.json.output }}",
+        "options": {
+          "systemMessage": "You are a document editor for SSG Course Proposals. Compile the two sections into one clean document.\n\nRules:\n- Start with a header: \"# Draft Course Proposal: [Course Title]\"\n- Add a summary block with all course details\n- Include both sections in order with clear headings\n- Do not rewrite or change the content — preserve everything\n- Fix any formatting inconsistencies\n- Add a validation checklist at the end:\n  - [ ] All K&A statements covered at least once\n  - [ ] At least 2 modes of assessment used\n  - [ ] MCQ is not sole assessment method\n  - [ ] Bloom's taxonomy verbs match WSQ level\n  - [ ] Total duration matches stated hours\n  - [ ] Constructive alignment between LOs, methods, and assessment\n- End with: \"*Draft generated by SSG Course Proposal Drafter — an open-source n8n workflow. Content must be reviewed and refined before submission to TPGateway.*\"\n\nOutput clean Markdown."
+        }
+      },
+      "id": "compile-agent",
+      "name": "Agent 3: Compile Draft",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [1260, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/markdown; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Return Draft",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1560, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-1",
+      "name": "Claude (LU/LO)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [700, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-2",
+      "name": "Claude (Methodology)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [1020, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-3",
+      "name": "Claude (Compile)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [1340, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "content": "## Data Lookup\nFetches TSC data from the Skills Framework and matches competencies to the course description using keyword scoring.",
+        "height": 240,
+        "width": 480
+      },
+      "id": "note-data",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [20, 20],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Agent Pipeline\nThree sequential agents, each building on the previous:\n1. **LU/LO Structure** — designs learning units, outcomes, topics, and maps K&A statements\n2. **Methodology & Assessment** — writes instructional rationale and assessment elaboration\n3. **Compile** — merges into a single draft with validation checklist\n\n**Why n8n?** Combines real SSG data with a multi-agent pipeline. Each agent has a focused role. The output maps directly into the CP form's Section 3 tabs.",
+        "height": 240,
+        "width": 960,
+        "color": 5
+      },
+      "id": "note-pipeline",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [560, 20],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Course Details Form": {
+      "main": [
+        [
+          {
+            "node": "Fetch TSC Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TSC Data": {
+      "main": [
+        [
+          {
+            "node": "Match TSCs to Course",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match TSCs to Course": {
+      "main": [
+        [
+          {
+            "node": "Agent 1: LU/LO Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 1: LU/LO Structure": {
+      "main": [
+        [
+          {
+            "node": "Agent 2: Methodology & Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 2: Methodology & Assessment": {
+      "main": [
+        [
+          {
+            "node": "Agent 3: Compile Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 3: Compile Draft": {
+      "main": [
+        [
+          {
+            "node": "Return Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (LU/LO)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 1: LU/LO Structure",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Methodology)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 2: Methodology & Assessment",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Compile)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 3: Compile Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Singapore"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,251 @@
+{
+  "name": "TSC Competency Finder & Learning Outcome Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "TSC Competency Finder",
+        "formDescription": "Enter your course topic and sector to find matching SkillsFuture Technical Skills & Competencies (TSCs), their Knowledge and Ability statements, and generate aligned learning outcomes.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Sector",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Infocomm Technology" },
+                  { "option": "Accountancy" },
+                  { "option": "Aerospace" },
+                  { "option": "Built Environment" },
+                  { "option": "Design" },
+                  { "option": "Early Childhood" },
+                  { "option": "Financial Services" },
+                  { "option": "Food Services" },
+                  { "option": "Healthcare" },
+                  { "option": "Hotel and Accommodation Services" },
+                  { "option": "Human Resource" },
+                  { "option": "Logistics" },
+                  { "option": "Media" },
+                  { "option": "Retail" },
+                  { "option": "Social Service" },
+                  { "option": "Tourism" },
+                  { "option": "Training and Adult Education" },
+                  { "option": "Workplace Safety and Health" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Course Topic",
+              "requiredField": true,
+              "placeholder": "e.g., Building AI Agents for Business Automation, Cloud Security Fundamentals, Data Visualisation with Python"
+            },
+            {
+              "fieldLabel": "WSQ Level",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Level 2 - Higher Certificate" },
+                  { "option": "Level 3 - Advanced Certificate" },
+                  { "option": "Level 4 - Diploma" },
+                  { "option": "Level 5 - Specialist Diploma" },
+                  { "option": "Level 6 - Graduate Diploma" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Additional Context",
+              "fieldType": "textarea",
+              "placeholder": "Any additional details about the course scope, target job roles, or specific skills you want to cover."
+            }
+          ]
+        },
+        "options": {
+          "path": "tsc-competency-finder"
+        }
+      },
+      "id": "form-trigger",
+      "name": "Course Input Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [-200, 200],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/pdfinn/ial-ai-agents/master/data/tsc-ka-data.json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-tsc-data",
+      "name": "Fetch TSC Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [80, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Get form inputs\nconst sector = $('Course Input Form').first().json['Sector'];\nconst topic = $('Course Input Form').first().json['Course Topic'];\nconst level = $('Course Input Form').first().json['WSQ Level'];\nconst context = $('Course Input Form').first().json['Additional Context'] || '';\n\n// Get TSC data from HTTP request\nconst tscData = $input.first().json;\n\n// Get sector TSCs\nconst sectorTSCs = tscData.sectors[sector] || [];\nif (sectorTSCs.length === 0) {\n  return [{ json: { error: `No TSC data found for sector: ${sector}. This demo includes data for sectors with K&A statements loaded.` } }];\n}\n\n// Keyword matching — split topic into words and match against skill names + K&A text\nconst keywords = topic.toLowerCase()\n  .split(/[\\s,;/&+]+/)\n  .filter(w => w.length > 2)\n  .filter(w => !['and', 'the', 'for', 'with', 'using', 'from', 'into'].includes(w));\n\nconst scored = sectorTSCs.map(tsc => {\n  const skillText = (tsc.skill + ' ' + (tsc.parent || '')).toLowerCase();\n  const kaText = [...(tsc.knowledge || []), ...(tsc.abilities || [])].join(' ').toLowerCase();\n  \n  // Score: skill name matches worth 3x, K&A text matches worth 1x\n  const skillMatches = keywords.filter(kw => skillText.includes(kw));\n  const kaMatches = keywords.filter(kw => kaText.includes(kw));\n  const score = skillMatches.length * 3 + kaMatches.length;\n  \n  return { ...tsc, score, matchedKeywords: [...new Set([...skillMatches, ...kaMatches])] };\n}).filter(tsc => tsc.score > 0)\n  .sort((a, b) => b.score - a.score);\n\n// Take top 8 matches\nconst topMatches = scored.slice(0, 8);\n\n// If no keyword matches, return first 5 TSCs and let AI decide\nconst results = topMatches.length > 0 ? topMatches : sectorTSCs.slice(0, 5);\n\n// Also include relevant CCS\nconst ccsResults = (tscData.ccs || []).slice(0, 3);\n\n// Format for the AI agent\nconst formattedTSCs = results.map(tsc => ({\n  tsc_code: tsc.code,\n  skill_name: tsc.skill,\n  proficiency_level: tsc.level,\n  emerging_skill: tsc.emerging,\n  matched_keywords: tsc.matchedKeywords || [],\n  knowledge_statements: tsc.knowledge || [],\n  ability_statements: tsc.abilities || []\n}));\n\nconst formattedCCS = ccsResults.map(ccs => ({\n  ccs_code: ccs.code,\n  skill_name: ccs.skill,\n  knowledge_statements: ccs.knowledge || [],\n  ability_statements: ccs.abilities || []\n}));\n\nreturn [{\n  json: {\n    sector,\n    topic,\n    level,\n    context,\n    matched_tscs: formattedTSCs,\n    matched_ccs: formattedCCS,\n    total_sector_tscs: sectorTSCs.length,\n    keyword_matches_found: topMatches.length\n  }\n}];"
+      },
+      "id": "filter-tscs",
+      "name": "Filter Matching TSCs",
+      "type": "n8n-nodes-base.code",
+      "position": [340, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Find the best-matching Technical Skills & Competencies (TSCs) for this course and generate aligned learning outcomes.\n\n**Sector:** {{ $json.sector }}\n**Course Topic:** {{ $json.topic }}\n**WSQ Level:** {{ $json.level }}\n**Additional Context:** {{ $json.context }}\n\n**Keyword matches found:** {{ $json.keyword_matches_found }} out of {{ $json.total_sector_tscs }} sector TSCs\n\n---\n\n**MATCHED TECHNICAL SKILLS & COMPETENCIES (TSCs):**\n{{ JSON.stringify($json.matched_tscs, null, 2) }}\n\n**MATCHED CRITICAL CORE SKILLS (CCS):**\n{{ JSON.stringify($json.matched_ccs, null, 2) }}\n\nReturn your analysis in the exact format specified in your instructions.",
+        "options": {
+          "systemMessage": "You are a competency mapping specialist for Singapore's Continuing Education and Training (CET) sector. You help training providers identify the right Technical Skills & Competencies (TSCs) from the SkillsFuture Skills Framework and generate aligned learning outcomes for WSQ course proposals.\n\nYou have been given real TSC data from the SSG Skills Framework, including actual Knowledge (K) and Ability (A) statements. Your job is to:\n1. Recommend the best-matching TSC(s) for the course topic\n2. Generate learning outcomes that map to the K&A statements\n3. Ensure all K&A statements for the selected TSC(s) are covered\n\nReturn your output in this exact Markdown structure:\n\n## Recommended TSCs\n\nFor each recommended TSC (pick 1-3 most relevant):\n- **TSC Code:** [code]\n- **Skill Name:** [name]\n- **Proficiency Level:** [level]\n- **Why this TSC:** One sentence explaining why this matches the course topic\n\n## Recommended Critical Core Skills\n\nPick 1-2 CCS that complement the technical skills:\n- **CCS Code:** [code]\n- **Skill Name:** [name]\n- **Why:** One sentence\n\n## Draft Learning Outcomes\n\nFor each recommended TSC, generate 1-2 learning outcomes that:\n- Start with a Bloom's taxonomy action verb appropriate to the WSQ level\n- Are measurable and assessable\n- Map to specific K&A statements from the TSC\n\nFormat each as:\n- **LO[n]:** [Learning outcome text]\n  - Maps to: [list of K and A statement codes, e.g., K1, K3, A2, A5]\n  - Bloom's level: [Remember/Understand/Apply/Analyse/Evaluate/Create]\n\n## K&A Coverage Check\n\nFor each selected TSC, list:\n- **[TSC Code]:** [total K statements] Knowledge + [total A statements] Ability = [total] statements\n  - Covered by LOs: [list which K&A codes are covered]\n  - Not yet covered: [list any gaps — these need additional LOs or topics]\n\n## Suggested Topics\n\nFor each learning outcome, suggest 2-3 specific teaching topics (T1, T2, etc.) that would address the mapped K&A statements. Format as:\n- **T[n]:** [Topic title] → covers [K/A codes]\n\nKeep recommendations grounded in the actual K&A statements provided. Do not invent TSC codes or K&A statements that are not in the data."
+        }
+      },
+      "id": "competency-agent",
+      "name": "Competency Mapping Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [620, 200],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/markdown; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Return Results",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [920, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {}
+      },
+      "id": "llm-competency",
+      "name": "Claude (Competency)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "position": [700, 420],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "content": "## How It Works\n1. Trainer fills in sector + topic + WSQ level\n2. Workflow fetches real SSG TSC data (12,000+ competencies with K&A statements)\n3. Code node filters by sector and keyword-matches to the topic\n4. AI agent analyses the matched TSCs and generates:\n   - Recommended TSC codes\n   - Draft learning outcomes mapped to K&A statements\n   - Coverage check (are all K&As covered?)\n   - Suggested teaching topics\n\n**Why n8n?** A chatbot doesn't have the SSG's competency database. This workflow grounds AI output in real framework data.",
+        "height": 340,
+        "width": 600,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-220, -120],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Data Pipeline\nFetches TSC data from GitHub → filters by sector → keyword-matches to topic → passes matched competencies to AI",
+        "height": 200,
+        "width": 480
+      },
+      "id": "note-pipeline",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [20, 40],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## AI Analysis\nThe agent receives real K&A statements and generates learning outcomes grounded in the actual framework — no hallucinated competency codes.",
+        "height": 200,
+        "width": 440,
+        "color": 5
+      },
+      "id": "note-ai",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [560, 40],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Course Input Form": {
+      "main": [
+        [
+          {
+            "node": "Fetch TSC Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TSC Data": {
+      "main": [
+        [
+          {
+            "node": "Filter Matching TSCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Matching TSCs": {
+      "main": [
+        [
+          {
+            "node": "Competency Mapping Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Competency Mapping Agent": {
+      "main": [
+        [
+          {
+            "node": "Return Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Competency)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Competency Mapping Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Singapore"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
